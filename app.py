@@ -76,8 +76,7 @@ if gspread_client:
         st.header("1. Ingresa el DNI del usuario")
         dni_a_buscar = st.text_input("DNI del usuario a restablecer")
 
-        # --- CAMBIO 1: Se muestra la contraseña fija en el texto ---
-        st.info(f"Su contraseña será reseteada a la clave fija configurada. Es: **{nueva_pass_fija}**")
+        st.info("La contraseña del usuario será reseteada a la clave fija configurada.")
         
         if st.button("🚀 Restablecer Contraseña"):
             if not dni_a_buscar:
@@ -88,7 +87,6 @@ if gspread_client:
                     st.error(f"No se encontró ningún usuario con el DNI: {dni_a_buscar}")
                 else:
                     id_moodle = usuario_encontrado.iloc[0]['id']
-                    # --- CAMBIO 2: Se actualiza el mensaje de carga ---
                     with st.spinner("Aguarde un momento..."):
                         exito, mensaje = resetear_password_moodle(
                             admin_usuario,
@@ -98,6 +96,8 @@ if gspread_client:
                         )
                     if exito:
                         st.success("¡Éxito! La contraseña fue cambiada a la clave fija.")
+                        # --- MENSAJE DE CONFIRMACIÓN AÑADIDO ---
+                        st.info(f"La contraseña del usuario ahora es: **{nueva_pass_fija}**")
                         st.balloons()
                     else:
                         st.error(f"Falló la automatización: {mensaje}")
