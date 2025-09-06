@@ -1,10 +1,11 @@
-# app.py (versión final para despliegue en la nube)
+# app.py (versión final con corrección de formato de secretos)
 
 import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from moodle_automator import resetear_password_moodle
+# --- CAMBIO 1: Importamos la biblioteca json ---
 import json
 
 # --- Conexión a Google Sheets (adaptada para local y nube) ---
@@ -13,8 +14,12 @@ def autorizar_cliente_gspread():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     # Comprueba si la app está corriendo en Streamlit Cloud
     if 'google_credentials' in st.secrets:
-        creds_json = st.secrets["google_credentials"]
-        creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
+        # Lee el secreto como un bloque de texto
+        creds_str = st.secrets["google_credentials"]
+        # --- CAMBIO 2: Convierte el texto (string) a un diccionario ---
+        creds_dict = json.loads(creds_str)
+        # -----------------------------------------------------------
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else: # Si no, asume que está corriendo localmente
         creds = Credentials.from_service_account_file("google.json", scopes=scopes)
     return gspread.authorize(creds)
