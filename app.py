@@ -1,4 +1,4 @@
-# app.py (versión con mejor manejo de errores)
+# app.py (versión final con contraseña fija)
 
 import streamlit as st
 import pandas as pd
@@ -23,30 +23,37 @@ def autorizar_cliente_gspread():
 def cargar_datos_usuarios(_client):
     """Carga los DNIs y los IDs de los usuarios."""
     try:
-        # Asegúrate de que tu primera pestaña se llame "Datos" o cambia el nombre aquí
+        # Asume que tu pestaña de datos se llama 'Datos'
         spreadsheet = _client.open("Base de dato - ids").worksheet("Datos")
         datos = spreadsheet.get_all_records()
         df = pd.DataFrame(datos)
         df['dni'] = df['dni'].astype(str)
         return df
     except gspread.exceptions.WorksheetNotFound:
-        st.error("Error: No se encontró la pestaña 'Datos' en tu Google Sheet. Por favor, verifica el nombre.")
+        st.error("Error: No se encontró la pestaña 'Datos' en tu Google Sheet.")
         return None
 
 @st.cache_data(ttl=300)
-def cargar_credenciales_admin(_client):
-    """Carga las credenciales del administrador."""
+def cargar_credenciales_y_pass(_client):
+    """Carga las credenciales del admin y la contraseña fija."""
     try:
-        spreadsheet = _client.open("Base de dato - ids").worksheet("Credenciales")
-        admin_user = spreadsheet.acell('B1').value
-        admin_pass = spreadsheet.acell('B2').value
-        if not admin_user or not admin_pass:
-            st.error("Error: Las celdas B1 o B2 en la pestaña 'Credenciales' están vacías.")
-            return None, None
-        return admin_user, admin_pass
+        # Carga credenciales
+        sheet_creds = _client.open("Base de dato - ids").worksheet("Credenciales")
+        admin_user = sheet_creds.acell('B1').value
+        admin_pass = sheet_creds.acell('B2').value
+        
+        # Carga contraseña fija
+        sheet_pass = _client.open("Base de dato - ids").worksheet("Passwords")
+        pass_fija = sheet_pass.acell('A1').value
+        
+        if not all([admin_user, admin_pass, pass_fija]):
+            st.error("Error: Revisa que las pestañas 'Credenciales' y 'Passwords' tengan datos.")
+            return None, None, None
+            
+        return admin_user, admin_pass, pass_fija
     except gspread.exceptions.WorksheetNotFound:
-        st.error("Error: No se encontró la pestaña 'Credenciales' en tu Google Sheet. Por favor, verifica el nombre (respeta mayúsculas).")
-        return None, None
+        st.error("Error: No se encontró la pestaña 'Credenciales' o 'Passwords'. Por favor, verifica los nombres.")
+        return None, None, None
 
 # --- Construcción de la Interfaz ---
 st.set_page_config(page_title="Asistente Moodle", layout="centered")
@@ -60,48 +67,42 @@ try:
     gspread_client = autorizar_cliente_gspread()
 except Exception as e:
     st.error(f"Error Crítico en la autenticación con Google: {e}")
-    st.info("Verifica que el 'secreto' de Streamlit Cloud esté configurado correctamente.")
 
 if gspread_client:
     df_usuarios = cargar_datos_usuarios(gspread_client)
-    admin_usuario, admin_password = cargar_credenciales_admin(gspread_client)
+    admin_usuario, admin_password, nueva_pass_fija = cargar_credenciales_y_pass(gspread_client)
 
-    if df_usuarios is not None and admin_usuario is not None:
-        st.success("Conexión con Google Drive exitosa. Datos y credenciales cargadas.")
+    if df_usuarios is not None and admin_usuario is not None and nueva_pass_fija is not None:
+        st.success("Conexión con Google Drive exitosa. Datos cargados correctamente.")
 
-        st.header("1. Ingresa los datos del usuario")
+        st.header("1. Ingresa el DNI del usuario")
         dni_a_buscar = st.text_input("DNI del usuario a restablecer")
 
-        st.info(
-            """
-            **Recordatorio: La contraseña temporal debe cumplir con las siguientes reglas:**
-            - Al menos 8 caracteres, 1 dígito, 1 minúscula, 1 mayúscula, 1 caracter especial (*, -, #).
-            """
-        )
-        nueva_pass = st.text_input("Nueva contraseña temporal", type="password")
+        # --- TEXTO ACTUALIZADO ---
+        st.info("Su contraseña será reseteada a la clave fija configurada.")
+        
+        # --- CAMPO DE CONTRASEÑA ELIMINADO ---
 
         if st.button("🚀 Restablecer Contraseña"):
-            if not all([dni_a_buscar, nueva_pass]):
-                st.warning("Por favor, completa los campos del DNI y la nueva contraseña.")
+            if not dni_a_buscar:
+                st.warning("Por favor, ingresa un DNI.")
             else:
                 usuario_encontrado = df_usuarios[df_usuarios['dni'] == dni_a_buscar]
                 if usuario_encontrado.empty:
                     st.error(f"No se encontró ningún usuario con el DNI: {dni_a_buscar}")
                 else:
                     id_moodle = usuario_encontrado.iloc[0]['id']
-                    with st.spinner(f"Iniciando reseteo... (La ejecución es en segundo plano, espera el resultado)"):
+                    with st.spinner(f"Iniciando reseteo para el usuario con ID: {id_moodle}..."):
                         exito, mensaje = resetear_password_moodle(
                             admin_usuario,
                             admin_password,
                             id_moodle,
-                            nueva_pass
+                            nueva_pass_fija # Usamos la contraseña fija
                         )
                     if exito:
-                        st.success("¡Éxito! La contraseña fue cambiada.")
-                        st.info(f"La nueva contraseña temporal es: **{nueva_pass}**")
+                        st.success("¡Éxito! La contraseña fue cambiada a la clave fija.")
                         st.balloons()
                     else:
                         st.error(f"Falló la automatización: {mensaje}")
     else:
-        st.warning("La aplicación no puede continuar porque no se cargaron todos los datos de Google Sheets. Revisa los errores de arriba.")
-
+        st.warning("La aplicación no puede continuar. Revisa los errores de carga de datos de Google Sheets.")
