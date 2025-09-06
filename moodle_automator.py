@@ -1,25 +1,34 @@
-# moodle_automator.py (versión final sin forzar cambio de contraseña)
+# moodle_automator.py (versión para despliegue en la nube con Chromium)
 
 import traceback
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# webdriver-manager ya no es necesario en la nube, Selenium lo gestiona
+# from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 def resetear_password_moodle(admin_user, admin_pass, user_id, nueva_pass):
-    """
-    Automatiza el reseteo de contraseña en Moodle, imitando el flujo manual
-    de un administrador para máxima compatibilidad y robustez.
-    """
     URL_BASE = "https://educacion.prefecturanaval.gob.ar/pev/cepa"
     driver = None
     try:
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+        # --- CAMBIOS PARA FUNCIONAR EN STREAMLIT CLOUD ---
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        
+        # Le decimos a Selenium que use el servicio de Chromium que instalamos
+        service = Service(executable_path="/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=options)
+        # --------------------------------------------------
+
         wait = WebDriverWait(driver, 15)
 
         # 1. Iniciar sesión en Moodle
@@ -44,12 +53,7 @@ def resetear_password_moodle(admin_user, admin_pass, user_id, nueva_pass):
         password_input.clear()
         password_input.send_keys(nueva_pass)
         password_input.send_keys(Keys.RETURN)
-
-        # --- CAMBIO: Se han comentado las siguientes dos líneas para NO forzar el cambio de contraseña ---
-        # checkbox_forzar = wait.until(EC.element_to_be_clickable((By.ID, "id_preference_auth_forcepasswordchange")))
-        # checkbox_forzar.click()
-        # ------------------------------------------------------------------------------------------------
-
+        
         # 6. Guardar los cambios
         time.sleep(1)
         boton_guardar = wait.until(EC.element_to_be_clickable((By.ID, "id_submitbutton")))
